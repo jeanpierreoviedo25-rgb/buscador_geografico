@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+
+<html lang="es">
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta name="viewport" content="width=device-width,initial-scale=1">
+
+<title>WINET | Buscador Geográfico MTTO PEXT</title>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+
+<style>
+
+*{box-sizing:border-box}body{margin:0;font-family:'Segoe UI',Arial,sans-serif;background:#edf2ef;color:#16372d}
+
+header{min-height:86px;background:linear-gradient(110deg,#06372d,#07513b);color:white;display:flex;align-items:center;padding:15px 28px;gap:25px}
+
+.logo{color:#62d96b;font-size:30px;font-weight:900;white-space:nowrap}header h1{margin:0;font-size:23px}header p{margin:5px 0 0;font-size:13px;color:#c9e9dc}
+
+.layout{display:grid;grid-template-columns:310px minmax(0,1fr);gap:14px;padding:14px;height:calc(100vh - 86px);min-height:480px}
+
+.panel{background:white;border-radius:12px;padding:22px;overflow-y:auto;box-shadow:0 3px 12px #00000010}.panel h2{font-size:18px;margin:0 0 20px}
+
+label{display:block;font-size:13px;font-weight:600;margin:15px 0 7px}input,select{width:100%;padding:12px;border:1px solid #cbd9d2;border-radius:7px;font-size:14px;background:white}
+
+input:focus,select:focus{outline:2px solid #20a66b}button{width:100%;margin-top:15px;padding:14px;background:#008b5b;color:white;border:0;border-radius:8px;font-size:14px;font-weight:bold;cursor:pointer}button:hover{background:#006d47}button:disabled{opacity:.6;cursor:not-allowed}.filtros-estado{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin-top:8px}.filtros-estado button{margin:0;padding:11px 3px;font-size:10px;background:#f1f6f3;color:#17513b;border:1px solid #c8dcd0}.filtros-estado button.activo{background:#07513b;color:#fff;border-color:#07513b}.filtros-estado button[data-filtro="atendido"].activo{background:#16803b;border-color:#16803b}.filtros-estado button[data-filtro="no atendido"].activo{background:#c62828;border-color:#c62828}.filtros-estado button[data-filtro="programado"].activo{background:#f6d77a;border-color:#e6bd4b;color:#533e00}#loginBtn{background:#07513b}
+
+.status{margin-top:14px;padding:13px;background:#e9f7ef;border-radius:8px;font-size:12px;line-height:1.8;overflow-wrap:anywhere}.map-container{position:relative;min-height:400px}#map{height:100%;width:100%;border-radius:12px}.map-label{position:absolute;top:15px;left:55px;z-index:500;background:white;border-radius:7px;padding:9px 13px;font-size:12px;font-weight:600;box-shadow:0 2px 8px #0002}
+
+.coordinate-tooltip{background:#063d30;color:white;border:1px solid #40d68a;border-radius:7px;padding:7px 10px;font-weight:bold;font-size:12px;box-shadow:0 3px 10px #0005}.coordinate-tooltip::before{border-top-color:#063d30!important}
+
+.legend{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;font-size:11px}.dot{display:inline-block;width:11px;height:11px;border:1px solid #444;border-radius:50%;vertical-align:middle;margin-right:3px}.green{background:#16a34a}.red{background:#e33434}.yellow{background:#f6d77a}.white{background:#fff}
+
+footer{margin-top:20px;font-size:11px;color:#73847c}@media(max-width:750px){header{padding:16px;gap:12px}.logo{font-size:22px}header h1{font-size:17px}.layout{grid-template-columns:1fr;height:auto}#map{height:65vh}}
+
+</style>
+
+</head>
+
+<body>
+
+<header><div class="logo">WINET</div><div><h1>Buscador Geográfico MTTO PEXT</h1><p>Postes WINET | Ordenamiento y Mantenimiento</p></div></header>
+
+<main class="layout">
+
+<section class="panel">
+
+<h2>🔎 Buscar código de poste</h2>
+
+<label for="codigoPoste">Código de poste</label>
+
+<input id="codigoPoste" type="text" inputmode="text" placeholder="Ej. 031015229" autocomplete="off">
+
+<button id="buscarCodigoBtn" type="button">📍 UBICAR POSTE</button>
+
+<div class="status" id="codigoStatus">Carga los postes y escribe un código para ubicarlo en el mapa.</div>
+
+<hr style="border:0;border-top:1px solid #e1ebe5;margin:22px 0">
+
+<h2>📍 Buscar coordenadas</h2>
+
+<label for="lat">Latitud</label><input id="lat" value="-12.04640000">
+
+<label for="lon">Longitud</label><input id="lon" value="-77.04280000">
+
+
+
+<label for="year">Año de solicitud</label>
+
+<select id="year">
+
+  <option value="todos" selected>TODOS LOS AÑOS</option>
+
+  <option value="2024">2024</option>
+
+  <option value="2025">2025</option>
+
+  <option value="2026">2026</option>
+
+  <option value="2027">2027</option>
+
+</select>
+
+<label for="radius">Radio de búsqueda</label><select id="radius"><option value="1">1 km</option><option value="3" selected>3 km</option><option value="5">5 km</option><option value="10">10 km</option></select>
+
+<label>Mostrar postes por estado</label>
+<div class="filtros-estado" role="group" aria-label="Filtrar postes por estado">
+<button type="button" data-filtro="todos" class="activo" aria-pressed="true">TODOS</button>
+<button type="button" data-filtro="atendido" aria-pressed="false">FINALIZADO / ATENDIDO</button>
+<button type="button" data-filtro="no atendido" aria-pressed="false">NO ATENDIDO / PENDIENTE</button>
+<button type="button" data-filtro="programado" aria-pressed="false">PROGRAMADO / PROCESO</button>
+</div>
+
+<button id="loginBtn" type="button">🔐 INICIAR SESIÓN CON WINET</button>
+
+<div class="status" id="loginStatus">Microsoft 365: sesión no iniciada.</div>
+
+<button id="loadBtn" type="button" disabled>🔄 CARGAR / ACTUALIZAR POSTES</button>
+
+<button id="searchBtn" type="button">🔎 BUSCAR UBICACIÓN</button>
+
+<div class="legend"><span><i class="dot green"></i>Finalizado / Atendido</span><span><i class="dot red"></i>No atendido / Pendiente</span><span><i class="dot yellow"></i>Programado / Proceso</span><span><i class="dot white"></i>Otros</span></div>
+
+<div class="status" id="status">Ingresa las coordenadas para buscar.</div>
+
+<footer>WINET | Mantenimiento PEXT<p>Consulta corporativa de postes</p></footer>
+
+</section>
+
+<section class="map-container"><div id="map"></div><div class="map-label">📍 Mapa geográfico WINET</div></section>
+
+</main>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+
+const map=L.map('map',{zoomControl:true}).setView([-12.0464,-77.0428],13);
+
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,attribution:'Tiles © Esri'}).addTo(map);
+
+let marker=null,circle=null,postes=[],postesLayer=L.layerGroup().addTo(map),pinPorPoste=new Map();
+let filtroEstado="todos";
+function establecerFiltro(valor, redibujar=true){filtroEstado=valor;document.querySelectorAll("[data-filtro]").forEach(b=>{const activo=b.dataset.filtro===valor;b.classList.toggle("activo",activo);b.setAttribute("aria-pressed",String(activo));});if(redibujar)buscar(false);}
+
+const $=id=>document.getElementById(id);
+
+function distanciaKm(a,b,c,d){const r=Math.PI/180;const x=(c-a)*r,y=(d-b)*r;const h=Math.sin(x/2)**2+Math.cos(a*r)*Math.cos(c*r)*Math.sin(y/2)**2;return 12742*Math.asin(Math.min(1,Math.sqrt(h)))}
+
+
+
+function colorEstado(s) {
+
+  s = String(s || '').trim().toUpperCase();
+
+
+
+  if (s === 'ATENDIDO' || s === 'FINALIZADO') {
+
+    return '#16a34a'; // Verde
+
+  }
+
+
+
+  if (s === 'NO ATENDIDO' || s === 'PENDIENTE') {
+
+    return '#e33434'; // Rojo
+
+  }
+
+
+
+  if (s === 'PROGRAMADO' || s === 'PROCESO') { return '#f6d77a'; } // Amarillo suave
+
+  return '#ffffff'; // Blanco para otros estados
+
+}
+
+
+
+function escapeHtml(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+
+function parseFila(f){if(!Array.isArray(f)||f.length<6)return null;const coord=String(f[4]??'').split(',');if(coord.length!==2)return null;const lat=Number(coord[0].trim()),lon=Number(coord[1].trim());if(!Number.isFinite(lat)||!Number.isFinite(lon)||Math.abs(lat)>90||Math.abs(lon)>180)return null;const fecha=String(f[1]??'');const match=fecha.match(/(?:^|\/)\s*(20\d{2})\s*$/);return {codigo:String(f[2]??''),fecha,distrito:String(f[3]??''),lat,lon,estado:String(f[5]??''),anio:match?match[1]:''}}
+
+function buscar(ajustarVista=true){const lt=$('lat').value.trim(),ln=$('lon').value.trim(),lat=Number(lt),lon=Number(ln),radio=Number($('radius').value),anio=$('year').value;
+
+if(!lt||!ln||!Number.isFinite(lat)||!Number.isFinite(lon)||Math.abs(lat)>90||Math.abs(lon)>180){alert('Ingresa coordenadas válidas con punto decimal.');return}
+
+if(marker)map.removeLayer(marker);if(circle)map.removeLayer(circle);postesLayer.clearLayers();pinPorPoste.clear();
+
+circle=L.circle([lat,lon],{radius:radio*1000,color:'#1473e6',weight:2,fillColor:'#1473e6',fillOpacity:.10}).addTo(map);
+
+const latTxt=lat.toFixed(8),lonTxt=lon.toFixed(8);
+
+marker=L.marker([lat,lon]).addTo(map).bindPopup('<b>📍 UBICACIÓN BUSCADA</b><br><b>Latitud:</b> '+latTxt+'<br><b>Longitud:</b> '+lonTxt).bindTooltip('📍 '+latTxt+', '+lonTxt,{permanent:true,direction:'top',offset:[0,-12],className:'coordinate-tooltip'});
+
+if(ajustarVista)map.fitBounds(circle.getBounds(),{padding:[35,35],animate:true});
+
+let encontrados=0;
+
+for(const p of postes){if(anio!=='todos'&&p.anio!==anio)continue;if(distanciaKm(lat,lon,p.lat,p.lon)>radio)continue;const estadoNormalizado=p.estado.trim().toUpperCase();if(filtroEstado==="atendido"&&!(["ATENDIDO","FINALIZADO"].includes(estadoNormalizado)))continue;if(filtroEstado==="no atendido"&&!(["NO ATENDIDO","PENDIENTE"].includes(estadoNormalizado)))continue;if(filtroEstado==="programado"&&!(["PROGRAMADO","PROCESO"].includes(estadoNormalizado)))continue;encontrados++;
+
+const c=colorEstado(p.estado);const pin=L.circleMarker([p.lat,p.lon],{radius:7,color:c==='#ffffff'?'#444':'#ffffff',weight:2,fillColor:c,fillOpacity:1});
+
+pin.bindPopup('<b>COD. POSTE: '+escapeHtml(p.codigo)+'</b><br><b>Distrito:</b> '+escapeHtml(p.distrito)+'<br><b>Fecha:</b> '+escapeHtml(p.fecha)+'<br><b>Estado:</b> '+escapeHtml(p.estado)+'<br><b>Coordenadas:</b> '+p.lat+', '+p.lon);postesLayer.addLayer(pin);pinPorPoste.set(p,pin)}
+
+$('status').innerHTML='<b>📍 Coordenadas:</b> '+latTxt+', '+lonTxt+'<br><b>📅 Año:</b> '+escapeHtml(anio==='todos'?'TODOS LOS AÑOS':anio)+'<br><b>📏 Radio:</b> '+radio+' km<br><b>🟢 Postes dentro del radio:</b> '+encontrados+'<br><b>Registros válidos cargados:</b> '+postes.length+(postes.length?'':'<br>Inicia sesión y pulsa CARGAR POSTES.');
+
+}
+
+function buscarCodigo(){
+
+ const codigo=$('codigoPoste').value.trim();
+
+ if(!codigo){$('codigoStatus').textContent='⚠️ Escribe un código de poste.';return;}
+
+ if(!postes.length){$('codigoStatus').textContent='⚠️ Primero inicia sesión y pulsa CARGAR / ACTUALIZAR POSTES.';return;}
+
+ // Comparación textual: conserva ceros iniciales como 031015229.
+
+ const encontrados=postes.filter(p=>p.codigo.trim()===codigo);
+
+ if(!encontrados.length){$('codigoStatus').textContent='❌ No se encontró el código '+codigo+' en los registros cargados.';return;}
+
+ const p=encontrados[0];
+
+ $('year').value='todos';
+ establecerFiltro('todos',false);
+
+ $('lat').value=p.lat.toFixed(8);
+
+ $('lon').value=p.lon.toFixed(8);
+
+ buscar();
+
+ map.setView([p.lat,p.lon],17,{animate:true});
+
+ const pin=pinPorPoste.get(p);
+
+ if(pin)pin.openPopup();
+
+ $('codigoStatus').innerHTML='✅ <b>POSTE '+escapeHtml(p.codigo)+'</b><br>Distrito: '+escapeHtml(p.distrito)+'<br>Estado: '+escapeHtml(p.estado)+'<br>Coordenadas: '+p.lat+', '+p.lon+(encontrados.length>1?'<br>⚠️ Hay '+encontrados.length+' registros con este código; se muestra el primero.':'');
+
+}
+
+$('buscarCodigoBtn').addEventListener('click',buscarCodigo);
+
+$('codigoPoste').addEventListener('keydown',e=>{if(e.key==='Enter')buscarCodigo()});
+
+document.querySelectorAll('[data-filtro]').forEach(b=>b.addEventListener('click',()=>establecerFiltro(b.dataset.filtro)));
+$('searchBtn').addEventListener('click',()=>{establecerFiltro('todos',false);buscar();});$('radius').addEventListener('change',buscar);$('year').addEventListener('change',buscar);for(const id of ['lat','lon'])$(id).addEventListener('keydown',e=>{if(e.key==='Enter'){establecerFiltro('todos',false);buscar()}});buscar();
+
+// Funciones de carga disponibles al módulo de autenticación.
+
+window.actualizarPostes=filas=>{
+
+ postes=filas.map(parseFila).filter(Boolean);
+
+ // Incluir automáticamente nuevos años presentes en el Excel.
+
+ const selector=$('year');
+
+ for(const anio of [...new Set(postes.map(p=>p.anio).filter(Boolean))].sort()){
+
+  if(![...selector.options].some(o=>o.value===anio))selector.add(new Option(anio,anio));
+
+ }
+
+ buscar();
+
+ return postes.length;
+
+};
+
+</script>
+
+<script type="module">
+
+import {PublicClientApplication} from 'https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.28.1/+esm';
+
+// Sustituye los valores por los dos identificadores de Información general en Microsoft Entra.
+
+const CLIENT_ID='ced2f597-539a-474e-a638-f022127b7ee7';
+
+const TENANT_ID='0d5b66d0-1032-4669-b79d-95ffa9f2b77a';
+
+const loginBtn=document.getElementById('loginBtn'),loginStatus=document.getElementById('loginStatus'),loadBtn=document.getElementById('loadBtn');
+
+const scopes=['User.Read','Files.Read'];
+
+if(CLIENT_ID.startsWith('PEGA_AQUI')||TENANT_ID.startsWith('PEGA_AQUI')){
+
+ loginStatus.textContent='⚠️ Falta pegar CLIENT_ID y TENANT_ID en el código.';
+
+}else{
+
+ const msal=new PublicClientApplication({auth:{clientId:CLIENT_ID,authority:'https://login.microsoftonline.com/'+TENANT_ID,redirectUri:'http://localhost:5500/'},cache:{cacheLocation:'sessionStorage'}});
+
+ try{
+
+await msal.initialize();
+
+
+
+const redirectResult = await msal.handleRedirectPromise();
+
+
+
+if (redirectResult?.account) {
+
+  msal.setActiveAccount(redirectResult.account);
+
+};
+
+ const accounts=msal.getAllAccounts();if(accounts.length){msal.setActiveAccount(accounts[0]);loginStatus.textContent='✅ Conectado: '+accounts[0].username;loginBtn.textContent='✅ CONECTADO A MICROSOFT 365';loadBtn.disabled=false}
+
+ loginBtn.addEventListener('click', async () => {
+
+  loginBtn.disabled = true;
+
+
+
+  try {
+
+    await msal.loginRedirect({ scopes });
+
+  } catch (e) {
+
+    console.error(e);
+
+    loginStatus.textContent = '❌ ' + (e.errorCode || e.message);
+
+    loginBtn.disabled = false;
+
+  }
+
+});
+
+
+
+async function token() {
+
+  const account = msal.getActiveAccount();
+
+  if (!account) throw Error('Primero inicia sesión.');
+
+
+
+  try {
+
+    return (await msal.acquireTokenSilent({ account, scopes })).accessToken;
+
+  } catch (e) {
+
+    await msal.acquireTokenRedirect({ account, scopes });
+
+    throw Error('Redirigiendo a Microsoft para autorizar el acceso.');
+
+  }
+
+}
+
+ async function consultar(url,accessToken){for(let intento=0;intento<3;intento++){const r=await fetch(url,{headers:{Authorization:'Bearer '+accessToken}});if(r.status===429||r.status===503){await new Promise(ok=>setTimeout(ok,1000*(intento+1)));continue}if(!r.ok){let detalle='';try{const j=await r.json();detalle=j.error?.message||''}catch{}throw Error('Microsoft Graph '+r.status+(detalle?': '+detalle:''))}return r.json()}throw Error('Microsoft Graph está limitando las solicitudes; inténtalo más tarde.')}
+
+ loadBtn.addEventListener('click',async()=>{
+
+  loadBtn.disabled=true;
+
+  loadBtn.textContent='⏳ LEYENDO POSTES...';
+
+  try{
+
+   const accessToken=await token();
+
+   const filas=[];
+
+   const lote=500;
+
+   let offset=0;
+
+   const firmas=new Set();
+
+   for(let pagina=0;pagina<200;pagina++){
+
+    const url='https://graph.microsoft.com/v1.0/me/drive/root:/POSTES_MAESTRO.xlsx:/workbook/tables/POSTES_MAESTRO/rows'+
+
+      '?$top='+lote+'&$skip='+offset;
+
+    const data=await consultar(url,accessToken);
+
+    const registros=data.value||[];
+
+    if(!registros.length)break;
+
+    // Detecta servicios que ignoran $skip y repiten la primera página.
+
+    const firma=JSON.stringify([registros.length,registros[0]?.index,registros[0]?.values,registros[registros.length-1]?.index,registros[registros.length-1]?.values]);
+
+    if(firmas.has(firma))throw Error('Microsoft Graph repitió una página; no se publicaron datos incompletos.');
+
+    firmas.add(firma);
+
+    for(const item of registros){if(Array.isArray(item.values))filas.push(...item.values)}
+
+    offset+=registros.length;
+
+    loginStatus.textContent='⏳ Leyendo Excel: '+filas.length+' filas (lote '+(pagina+1)+')';
+
+    if(registros.length<lote)break;
+
+    if(pagina===199)throw Error('Se alcanzó el límite de 200 páginas.');
+
+   }
+
+   const validos=window.actualizarPostes(filas);
+
+   loginStatus.textContent='✅ Excel leído: '+validos+' postes válidos de '+filas.length+
+
+     ' filas. Última carga: '+new Date().toLocaleTimeString('es-PE');
+
+  }catch(e){
+
+   console.error(e);
+
+   loginStatus.textContent='❌ '+e.message+' — Se conservaron los postes de la última carga exitosa.';
+
+  }finally{
+
+   loadBtn.disabled=false;
+
+   loadBtn.textContent='🔄 CARGAR / ACTUALIZAR POSTES';
+
+  }
+
+ });
+
+ }catch(e){console.error(e);loginStatus.textContent='❌ No se pudo iniciar MSAL: '+e.message}
+
+}
+
+</script>
+
+</body>
+
+</html>
